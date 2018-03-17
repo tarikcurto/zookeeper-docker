@@ -1,4 +1,4 @@
-FROM tarikcurto/centos7-java8
+FROM tarikcurto/centos-java:7-8
 
 ENV ZOOKEEPER_VERSION 3.4.11
 
