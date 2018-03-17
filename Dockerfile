@@ -1,34 +1,40 @@
-FROM wurstmeister/base
+FROM tarikcurto/centos7-java8
 
-MAINTAINER Wurstmeister
+ENV ZOOKEEPER_VERSION 3.4.11
 
-ENV ZOOKEEPER_VERSION 3.4.9
+# Script files
+COPY zookeeper-download.sh /tmp/
 
-#Download Zookeeper
-RUN wget -q http://mirror.vorboss.net/apache/zookeeper/zookeeper-${ZOOKEEPER_VERSION}/zookeeper-${ZOOKEEPER_VERSION}.tar.gz && \
-wget -q https://www.apache.org/dist/zookeeper/KEYS && \
-wget -q https://www.apache.org/dist/zookeeper/zookeeper-${ZOOKEEPER_VERSION}/zookeeper-${ZOOKEEPER_VERSION}.tar.gz.asc && \
-wget -q https://www.apache.org/dist/zookeeper/zookeeper-${ZOOKEEPER_VERSION}/zookeeper-${ZOOKEEPER_VERSION}.tar.gz.md5
+# Download necessary packages
+RUN yum install -y epel-release && yum install -y wget jq openssh-server
 
-#Verify download
-RUN md5sum -c zookeeper-${ZOOKEEPER_VERSION}.tar.gz.md5 && \
-gpg --import KEYS && \
-gpg --verify zookeeper-${ZOOKEEPER_VERSION}.tar.gz.asc
+# Download Zookeeper & keys
+RUN chmod +x /tmp/zookeeper-download.sh && /tmp/zookeeper-download.sh
 
-#Install
-RUN tar -xzf zookeeper-${ZOOKEEPER_VERSION}.tar.gz -C /opt
+# Verify download
+RUN wget -q https://www.apache.org/dist/zookeeper/zookeeper-${ZOOKEEPER_VERSION}/zookeeper-${ZOOKEEPER_VERSION}.tar.gz.md5 -O /tmp/zookeeper-${ZOOKEEPER_VERSION}.tar.gz.md5 && \
+    cd /tmp && md5sum -c /tmp/zookeeper-${ZOOKEEPER_VERSION}.tar.gz.md5
 
-#Configure
-RUN mv /opt/zookeeper-${ZOOKEEPER_VERSION}/conf/zoo_sample.cfg /opt/zookeeper-${ZOOKEEPER_VERSION}/conf/zoo.cfg
+# Install Zookeeper folder & delete compressed file
+RUN tar -xzf /tmp/zookeeper-${ZOOKEEPER_VERSION}.tar.gz -C /opt
 
-ENV JAVA_HOME /usr/lib/jvm/java-7-openjdk-amd64
+# Delete uncessary files
+RUN rm -f /tmp/zookeeper-${ZOOKEEPER_VERSION}.tar.gz
+
+# Configure
 ENV ZK_HOME /opt/zookeeper-${ZOOKEEPER_VERSION}
-RUN sed  -i "s|/tmp/zookeeper|$ZK_HOME/data|g" $ZK_HOME/conf/zoo.cfg; mkdir $ZK_HOME/data
+COPY zoo.cfg /opt/zookeeper-${ZOOKEEPER_VERSION}/conf/
+COPY zookeeper-start.sh /usr/bin/
 
-ADD start-zk.sh /usr/bin/start-zk.sh 
+## Replace zookeper data directory
+#RUN mkdir $ZK_HOME/data && \
+#    sed  -i "s|dataDir=/tmp/zookeeper|dataDir=$ZK_HOME/data|g" $ZK_HOME/conf/zoo.cfg
+
+## Allow zookeper auto purge
+#RUN sed -i -r 's|#autopurge|autopurge|g' $ZK_HOME/conf/zoo.cfg
+
 EXPOSE 2181 2888 3888
-
 WORKDIR /opt/zookeeper-${ZOOKEEPER_VERSION}
 VOLUME ["/opt/zookeeper-${ZOOKEEPER_VERSION}/conf", "/opt/zookeeper-${ZOOKEEPER_VERSION}/data"]
 
-CMD /usr/sbin/sshd && bash /usr/bin/start-zk.sh
+CMD bash /usr/bin/zookeeper-start.sh
